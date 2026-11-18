@@ -4,6 +4,7 @@ import {
   forgetpasssendotp,
   googlelogin,
   loginservice,
+  logoutService,
   refreshTokenService,
   resetpassword,
   signupservice,
@@ -26,6 +27,7 @@ export const routes = {
   forgotPassword: "/forgotPassword", //patch
   resetpassword: "/resetpassword", //patch
   uploadfiles: "/uploadfiles", //post
+  logout: "/logout", //post
 }
 
 export const userrouter = Router()
@@ -43,6 +45,11 @@ userrouter.post(routes.login, async (req, res) => {
   const { identifier, password } = req.body
   const { data } = await loginservice({ identifier, password })
   return successRes({ res, statusCode: 200, data })
+})
+
+userrouter.post(routes.logout, auth, async (req, res) => {
+  const { data } = await logoutService({ payload: req.payload })
+  return successRes({ res, message: "logged out", data })
 })
 
 userrouter.get(

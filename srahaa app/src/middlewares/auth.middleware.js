@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken"
 import { userModel } from "../DB/models/user.model.js"
 
 import { errorRes } from "../utils/error.res.js"
+import { redisclient } from "../DB/redis.counncaiton.js"
 
 export const tokenEnum = {
   ACCESS: "accessToken",
@@ -10,11 +11,12 @@ export const tokenEnum = {
 }
 
 export const auth = async (req, res, next) => {
-  const { user } = await decodeToken({
+  const { user, payload } = await decodeToken({
     authorization: req.headers.authorization,
   })
 
   req.user = user
+  req.payload = payload // fe el jti (we need it in logout)
 
   next()
 }
@@ -42,13 +44,22 @@ export const decodeToken = async ({
 
   // console.log({ payload })
 
+  // jti check: if token has no id or its id in blacklist => user logged out
+  if (!payload.jti) {
+    errorRes("Invalid token, please login again", 401)
+  }
+  const isBlacklisted = await redisclient.get(`blacklist:${payload.jti}`)
+  if (isBlacklisted) {
+    errorRes("Token revoked, please login again", 401)
+  }
+
   const user = await userModel.findById(payload.__id)
 
   if (!user) {
     errorRes("User not found", 404)
   }
 
-  return { user }
+  return { user, payload }
 }
 
 export const authorizetone = (...roles) => {

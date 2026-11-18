@@ -8,6 +8,8 @@ import { ProviderEnum } from "./user.types.js"
 import { random } from "../../utils/email/createOtp.js"
 import { emailTemplate } from "../../utils/email/emailTemplate.js"
 import { sendEmail } from "../../utils/email/sendemail.js"
+import { nanoid } from "nanoid"
+import { redisclient } from "../../DB/redis.counncaiton.js"
 const googleClient = new OAuth2Client({
   clientId: process.env.GOOGLE_CLIENT_ID,
 })
@@ -66,6 +68,8 @@ export const loginservice = async ({ identifier, password }) => {
   if (!ispasswordMatch) {
     errorRes("Invalid credentials", 400)
   }
+  // jwtid = id unique for this login session (same id for access & refresh)
+  const jwtid = nanoid()
   const accessToken = jwt.sign(
     {
       __id: user._id,
@@ -74,6 +78,7 @@ export const loginservice = async ({ identifier, password }) => {
     process.env.TOKEN_SECRET,
     {
       expiresIn: "10m",
+      jwtid,
     },
   )
   const refreshToken = jwt.sign(
@@ -84,14 +89,24 @@ export const loginservice = async ({ identifier, password }) => {
     process.env.REFRESH_TOKEN_SECRET,
     {
       expiresIn: "7d",
+      jwtid,
     },
   )
 
   return { data: { accessToken, refreshToken } }
 }
 
+export const logoutService = async ({ payload }) => {
+  // put the token id (jti) in redis as "blacklist"
+  // EX = 7 days (refresh token life) then redis deletes it automatically
+  await redisclient.set(`blacklist:${payload.jti}`, "logout", {
+    EX: 7 * 24 * 60 * 60,
+  })
+  return { data: {} }
+}
+
 export const refreshTokenService = async ({ authorization }) => {
-  const { user } = await decodeToken({
+  const { user, payload } = await decodeToken({
     authorization,
     tokentype: tokenEnum.REFRESH,
   })
@@ -104,6 +119,7 @@ export const refreshTokenService = async ({ authorization }) => {
     process.env.TOKEN_SECRET,
     {
       expiresIn: "1m",
+      jwtid: payload.jti, // same session id
     },
   )
 
@@ -131,6 +147,7 @@ export const googlelogin = async ({ token }) => {
     })
   }
 
+  const jwtid = nanoid()
   const accessToken = jwt.sign(
     {
       __id: user._id,
@@ -139,6 +156,7 @@ export const googlelogin = async ({ token }) => {
     process.env.TOKEN_SECRET,
     {
       expiresIn: "10m",
+      jwtid,
     },
   )
   const refreshToken = jwt.sign(
@@ -149,6 +167,7 @@ export const googlelogin = async ({ token }) => {
     process.env.REFRESH_TOKEN_SECRET,
     {
       expiresIn: "7d",
+      jwtid,
     },
   )
   return {
