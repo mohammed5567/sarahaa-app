@@ -1,7 +1,10 @@
 import { createClient } from "redis"
+import { config } from "dotenv"
+
+config({ path: "./config/.env" })
 
 export const redisclient = createClient({
-  url: "redis://127.0.0.1:6380",
+  url: process.env.REDIS_URL,
   database: 1,
 })
 
